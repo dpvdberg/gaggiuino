@@ -111,6 +111,7 @@ void loop(void) {
   if (lcdCurrentPageId != lcdLastCurrentPageId) pageValuesRefresh();
   lcdListen();
   sensorsRead();
+  handlePostBrew();
   brewDetect();
   modeSelect();
   lcdRefresh();
@@ -276,7 +277,7 @@ static void pageValuesRefresh() {
 //############################____OPERATIONAL_MODE_CONTROL____#################################
 //#############################################################################################
 static void modeSelect(void) {
-  if (systemState.phase != StartupPhase::FINISHED) return;
+  if (systemState.initPhase != InitPhase::FINISHED) return;
 
   switch (selectedOperationalMode) {
     //REPLACE ALL THE BELOW WITH OPMODE_auto_profiling
@@ -700,6 +701,7 @@ static void profiling(void) {
     if (phaseProfiler.isFinished()) {
       setPumpOff();
       closeValve();
+      systemState.postShotPhase = PostShotPhase::POST_SHOT;
       brewActive = false;
     } else if (currentPhase.getType() == PHASE_TYPE::PHASE_TYPE_PRESSURE) {
       float newBarValue = currentPhase.getTarget();
@@ -712,7 +714,7 @@ static void profiling(void) {
       openValve();
       setPumpFlow(newFlowValue, pressureRestriction, currentState);
     }
-  } else {
+  } else if (systemState.postShotPhase == PostShotPhase::IDLE) {
     setPumpOff();
     closeValve();
   }
@@ -780,7 +782,7 @@ static void brewParamsReset(void) {
 
 static bool sysReadinessCheck(void) {
   // Startup procedures not finished
-  if (systemState.phase != StartupPhase::FINISHED) {
+  if (systemState.initPhase != InitPhase::FINISHED) {
     return false;
   }
   // If there's not enough water in the tank
@@ -893,44 +895,88 @@ static void handleStartup(void) {
 
 
   if (currentState.temperature > BOILER_FILL_SKIP_TEMP) {
-    systemState.phase = StartupPhase::FINISHED;
+    systemState.initPhase = InitPhase::FINISHED;
     return;
   }
 
-  switch (systemState.phase) {
-    case StartupPhase::INITIAL:
+  switch (systemState.initPhase) {
+    case InitPhase::INITIAL:
       if (isBoilerFillPhase(getTimeSinceInit()) && !isSwitchOn()) {
-        systemState.phase = StartupPhase::TARE_SCALES;
+        systemState.initPhase = InitPhase::TARE_SCALES;
       }
       else if (isSwitchOn()) {
         lcdShowPopup("Brew Switch ON!");
       }
-    case StartupPhase::TARE_SCALES:
-      currentState.tarePending = true;
-      systemState.phase = StartupPhase::MEASURE_START_WEIGHT;
       break;
-    case StartupPhase::MEASURE_START_WEIGHT:
+    case InitPhase::TARE_SCALES:
+      currentState.tarePending = true;
+      systemState.initPhase = InitPhase::MEASURE_START_WEIGHT;
+      break;
+    case InitPhase::MEASURE_START_WEIGHT:
       if (!currentState.tarePending) {
-        systemState.phase = StartupPhase::FILLING_BOILER;
+        systemState.initPhase = InitPhase::FILLING_BOILER;
       }
-    case StartupPhase::FILLING_BOILER:
+      break;
+    case InitPhase::FILLING_BOILER:
       lcdShowPopup("Filling boiler!");
       openValve();
       setPumpToRawValue(35);
-      systemState.phase = StartupPhase::WAITING_FOR_FILL;
+      systemState.initPhase = InitPhase::WAITING_FOR_FILL;
       break;
-    case StartupPhase::WAITING_FOR_FILL:
+    case InitPhase::WAITING_FOR_FILL:
+      lcdShowPopup("Filling boiler!");
       if (currentState.weight > STARTUP_FILL_WEIGHT) {
         closeValve();
         setPumpOff();
-        systemState.phase = StartupPhase::FINISHED;
+        systemState.initPhase = InitPhase::FINISHED;
       }
-    case StartupPhase::FINISHED:
+      break;
+    case InitPhase::FINISHED:
       break;
   }  
 #else
-  systemState.phase = StartupPhase::FINISHED;
+  systemState.phase = InitPhase::FINISHED;
 #endif
+}
+
+static void handlePostBrew(void) {
+  static unsigned long timer = millis();
+
+  switch (systemState.postShotPhase) {
+    case PostShotPhase::IDLE:
+      break;
+    case PostShotPhase::POST_SHOT:
+      if (lcdCurrentPageId == NextionPage::Home) {
+        systemState.postShotPhase = PostShotPhase::WAITING_FOR_BREW_BUTTON_RELEASE;
+      }
+      break;
+    case PostShotPhase::WAITING_FOR_BREW_BUTTON_RELEASE:
+      if (!currentState.brewSwitchState) {
+        systemState.postShotPhase = PostShotPhase::START_CLEAN_SHOWERHEAD;
+      } else {
+        lcdShowPopup("Switch brew to clean");
+      }
+      break;
+    case PostShotPhase::START_CLEAN_SHOWERHEAD:
+      if (currentState.temperature > CLEANING_SKIP_TEMP) {
+        systemState.postShotPhase = PostShotPhase::IDLE;
+      } else {
+        timer = millis();
+        lcdShowPopup("Cleaning showerhead!");
+        openValve();
+        setPumpToRawValue(35);
+        systemState.postShotPhase = PostShotPhase::STOP_CLEAN_SHOWERHEAD;
+      }
+      break;
+    case PostShotPhase::STOP_CLEAN_SHOWERHEAD:
+      lcdShowPopup("Cleaning showerhead!");
+      if (millis() - timer > CLEANING_DURATION) {
+        closeValve();
+        setPumpOff();
+        systemState.postShotPhase = PostShotPhase::IDLE;
+      }
+      break;
+  }
 }
 
 static bool isBoilerFillPhase(unsigned long elapsedTime) {

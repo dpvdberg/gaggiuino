@@ -35,9 +35,11 @@
 #define REFRESH_SCREEN_EVERY    150 // Screen refresh interval (ms)
 #define REFRESH_FLOW_EVERY      50 // Flow refresh interval (ms)
 #define HEALTHCHECK_EVERY       30000 // System checks happen every 30sec
-#define BOILER_FILL_START_TIME  3000UL // Boiler fill start time - 2 sec since system init.
+#define BOILER_FILL_START_TIME  3000UL // Boiler fill start time - 3 sec since system init.
+#define CLEANING_DURATION       2000UL // Shower head cleaning duration.
 #define STARTUP_FILL_WEIGHT     5.0f // Grams of liquid to purge at startup
 #define BOILER_FILL_SKIP_TEMP   85.f // Boiler fill skip temperature threshold
+#define CLEANING_SKIP_TEMP      100.f // Cleaning skip temperature threshold
 #define SYS_PRESSURE_IDLE       0.7f // System pressure threshold at idle
 #define MIN_WATER_LVL           10u // Min allowable tank water lvl
 

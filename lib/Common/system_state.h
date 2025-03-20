@@ -2,7 +2,7 @@
 #ifndef SYSTEM_STATE_H
 #define SYSTEM_STATE_H
 
-enum StartupPhase {
+enum InitPhase {
   INITIAL,
   TARE_SCALES,
   MEASURE_START_WEIGHT,
@@ -11,8 +11,18 @@ enum StartupPhase {
   FINISHED
 };
 
+enum PostShotPhase {
+  IDLE,
+  POST_SHOT,
+  WAITING_FOR_BREW_BUTTON_RELEASE,
+  START_CLEAN_SHOWERHEAD,
+  STOP_CLEAN_SHOWERHEAD
+};
+
+
 struct SystemState {
-  StartupPhase phase;
+  InitPhase initPhase;
+  PostShotPhase postShotPhase;
 };
 
 #endif
