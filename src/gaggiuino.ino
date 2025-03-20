@@ -107,7 +107,7 @@ void setup(void) {
 
 //Main loop where all the logic is continuously run
 void loop(void) {
-  fillBoiler();
+  handleStartup();
   if (lcdCurrentPageId != lcdLastCurrentPageId) pageValuesRefresh();
   lcdListen();
   sensorsRead();
@@ -276,7 +276,7 @@ static void pageValuesRefresh() {
 //############################____OPERATIONAL_MODE_CONTROL____#################################
 //#############################################################################################
 static void modeSelect(void) {
-  if (!systemState.startupInitFinished) return;
+  if (systemState.phase != StartupPhase::FINISHED) return;
 
   switch (selectedOperationalMode) {
     //REPLACE ALL THE BELOW WITH OPMODE_auto_profiling
@@ -780,7 +780,7 @@ static void brewParamsReset(void) {
 
 static bool sysReadinessCheck(void) {
   // Startup procedures not finished
-  if (!systemState.startupInitFinished) {
+  if (systemState.phase != StartupPhase::FINISHED) {
     return false;
   }
   // If there's not enough water in the tank
@@ -888,26 +888,48 @@ static unsigned long getTimeSinceInit(void) {
   return millis() - startTime;
 }
 
-static void fillBoiler(void) {
+static void handleStartup(void) {
   #if defined LEGO_VALVE_RELAY || defined SINGLE_BOARD
 
-  if (systemState.startupInitFinished) {
-    return;
-  }
 
   if (currentState.temperature > BOILER_FILL_SKIP_TEMP) {
-    systemState.startupInitFinished = true;
+    systemState.phase = StartupPhase::FINISHED;
     return;
   }
 
-  if (isBoilerFillPhase(getTimeSinceInit()) && !isSwitchOn()) {
-    fillBoilerUntilThreshod(getTimeSinceInit());
-  }
-  else if (isSwitchOn()) {
-    lcdShowPopup("Brew Switch ON!");
-  }
+  switch (systemState.phase) {
+    case StartupPhase::INITIAL:
+      if (isBoilerFillPhase(getTimeSinceInit()) && !isSwitchOn()) {
+        systemState.phase = StartupPhase::TARE_SCALES;
+      }
+      else if (isSwitchOn()) {
+        lcdShowPopup("Brew Switch ON!");
+      }
+    case StartupPhase::TARE_SCALES:
+      currentState.tarePending = true;
+      systemState.phase = StartupPhase::MEASURE_START_WEIGHT;
+      break;
+    case StartupPhase::MEASURE_START_WEIGHT:
+      if (!currentState.tarePending) {
+        systemState.phase = StartupPhase::FILLING_BOILER;
+      }
+    case StartupPhase::FILLING_BOILER:
+      lcdShowPopup("Filling boiler!");
+      openValve();
+      setPumpToRawValue(35);
+      systemState.phase = StartupPhase::WAITING_FOR_FILL;
+      break;
+    case StartupPhase::WAITING_FOR_FILL:
+      if (currentState.weight > STARTUP_FILL_WEIGHT) {
+        closeValve();
+        setPumpOff();
+        systemState.phase = StartupPhase::FINISHED;
+      }
+    case StartupPhase::FINISHED:
+      break;
+  }  
 #else
-  systemState.startupInitFinished = true;
+  systemState.phase = StartupPhase::FINISHED;
 #endif
 }
 
@@ -915,38 +937,9 @@ static bool isBoilerFillPhase(unsigned long elapsedTime) {
   return lcdCurrentPageId == NextionPage::Home && elapsedTime >= BOILER_FILL_START_TIME;
 }
 
-static bool isBoilerFull(unsigned long elapsedTime) {
-  bool boilerFull = false;
-  if (elapsedTime > BOILER_FILL_START_TIME + 1000UL) {
-    boilerFull =  (previousSmoothedPressure - currentState.smoothedPressure > -0.02f)
-                &&
-                  (previousSmoothedPressure - currentState.smoothedPressure < 0.001f);
-  }
-
-  return elapsedTime >= BOILER_FILL_TIMEOUT || boilerFull;
-}
-
 // Checks if Brew switch is ON
 static bool isSwitchOn(void) {
   return currentState.brewSwitchState && lcdCurrentPageId == NextionPage::Home;
-}
-
-static void fillBoilerUntilThreshod(unsigned long elapsedTime) {
-  if (elapsedTime >= BOILER_FILL_TIMEOUT) {
-    systemState.startupInitFinished = true;
-    return;
-  }
-
-  if (isBoilerFull(elapsedTime)) {
-    closeValve();
-    setPumpOff();
-    systemState.startupInitFinished = true;
-    return;
-  }
-
-  lcdShowPopup("Filling boiler!");
-  openValve();
-  setPumpToRawValue(35);
 }
 
 static void updateStartupTimer(void) {
