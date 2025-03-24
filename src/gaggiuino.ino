@@ -107,12 +107,12 @@ void setup(void) {
 
 //Main loop where all the logic is continuously run
 void loop(void) {
+  brewDetect();
   handleStartup();
   if (lcdCurrentPageId != lcdLastCurrentPageId) pageValuesRefresh();
   lcdListen();
   sensorsRead();
   handlePostBrew();
-  brewDetect();
   modeSelect();
   lcdRefresh();
   espCommsSendSensorData(currentState);
@@ -149,6 +149,13 @@ static void sensorsReadTemperature(void) {
   }
 }
 
+static bool detectWeightJump(Measurement lastMeasurement, float newWeight) {
+  float timeDelta = millis() - lastMeasurement.millis;
+  float weightDelta = abs(lastMeasurement.value - newWeight);
+
+  return weightDelta / (float) fmax(1.0f, timeDelta / 1000.0f) > WEIGHT_JUMP_GRAMS_PER_SEC;
+}
+
 static void sensorsReadWeight(void) {
   uint32_t elapsedTime = millis() - scalesTimer;
 
@@ -158,18 +165,23 @@ static void sensorsReadWeight(void) {
       if (currentState.tarePending) {
         scalesTare();
         weightMeasurements.clear();
-        weightMeasurements.add(scalesGetWeight());
+        weightMeasurements.add(Measurement{ .value = 0.f, .millis = millis() });
         currentState.tarePending = false;
       }
-      else {
-        weightMeasurements.add(scalesGetWeight());
-      }
-      currentState.weight = weightMeasurements.latest().value;
+
+      Measurement measuredWeight = scalesGetWeight();
+      currentState.weight = measuredWeight.value;
 
       if (brewActive) {
-        currentState.shotWeight = currentState.tarePending ? 0.f : currentState.weight;
-        currentState.weightFlow = fmax(0.f, weightMeasurements.measurementChange().changeSpeed());
-        currentState.smoothedWeightFlow = smoothScalesFlow.updateEstimate(currentState.weightFlow);
+        const bool jumped = detectWeightJump(weightMeasurements.latest(), currentState.weight);
+        if (jumped) {
+          // ignored
+        } else {
+          weightMeasurements.add(measuredWeight);
+          currentState.shotWeight = currentState.weight;
+          currentState.weightFlow = fmax(0.f, weightMeasurements.measurementChange().changeSpeed());
+          currentState.smoothedWeightFlow = smoothScalesFlow.updateEstimate(currentState.weightFlow);
+        }
       }
     }
     scalesTimer = millis();
@@ -207,7 +219,7 @@ static void calculateWeightAndFlow(void) {
 
   if (brewActive) {
     // Marking for tare in case smth has gone wrong and it has exited tare already.
-    if (currentState.weight < -.3f) currentState.tarePending = true;
+    // if (currentState.weight < -.3f) currentState.tarePending = true;
 
     if (elapsedTime > REFRESH_FLOW_EVERY) {
       flowTimer = millis();

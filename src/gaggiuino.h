@@ -42,6 +42,7 @@
 #define CLEANING_SKIP_TEMP      100.f // Cleaning skip temperature threshold
 #define SYS_PRESSURE_IDLE       0.7f // System pressure threshold at idle
 #define MIN_WATER_LVL           10u // Min allowable tank water lvl
+#define WEIGHT_JUMP_GRAMS_PER_SEC       5.0f // Filtered weight jumps (g).
 
 enum class OPERATION_MODES {
   OPMODE_straight9Bar,
