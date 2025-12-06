@@ -172,10 +172,14 @@ static void sensorsReadWeight(void) {
       Measurement measuredWeight = scalesGetWeight();
       currentState.weight = measuredWeight.value;
 
+      Measurement latestMeasurement = weightMeasurements.latest();
+
       if (brewActive) {
-        const bool jumped = detectWeightJump(weightMeasurements.latest(), currentState.weight);
+        const bool jumped = detectWeightJump(latestMeasurement, currentState.weight);
         if (jumped) {
-          // ignored
+          // Use previous value
+          measuredWeight.value = latestMeasurement.value;
+          weightMeasurements.add(measuredWeight);
         } else {
           weightMeasurements.add(measuredWeight);
           currentState.shotWeight = currentState.weight;
@@ -551,7 +555,7 @@ void addPreinfusionPhases() {
     float isWeightAbove = ACTIVE_PROFILE(runningCfg).preinfusionWeightAbove > 0.f ? ACTIVE_PROFILE(runningCfg).preinfusionWeightAbove : -1.f;
     float isWaterPumped = ACTIVE_PROFILE(runningCfg).preinfusionFilled > 0.f ? ACTIVE_PROFILE(runningCfg).preinfusionFilled : -1.f;
 
-    addFlowPhase(Transition{ ACTIVE_PROFILE(runningCfg).preinfusionFlowVol }, ACTIVE_PROFILE(runningCfg).preinfusionFlowPressureTarget, ACTIVE_PROFILE(runningCfg).preinfusionFlowTime * 1000, isPressureAbove, -1, isWeightAbove, isWaterPumped);
+    addFlowPhase(Transition{ ACTIVE_PROFILE(runningCfg).preinfusionFlowVol }, ACTIVE_PROFILE(runningCfg).preinfusionFlowPressureTarget, ACTIVE_PROFILE(runningCfg).preinfusionFlowTime * 1000, isPressureAbove, -1, isWeightAbove, isWaterPumped, false, false);
   }
   else { // pressure based PI enabled
     // For now handling phase switching on restrictions here but as this grow will have to deal with it otherwise.
@@ -559,7 +563,7 @@ void addPreinfusionPhases() {
     float isWeightAbove = ACTIVE_PROFILE(runningCfg).preinfusionWeightAbove > 0.f ? ACTIVE_PROFILE(runningCfg).preinfusionWeightAbove : -1.f;
     float isWaterPumped = ACTIVE_PROFILE(runningCfg).preinfusionFilled > 0.f ? ACTIVE_PROFILE(runningCfg).preinfusionFilled : -1.f;
 
-    addPressurePhase(Transition{ ACTIVE_PROFILE(runningCfg).preinfusionBar }, ACTIVE_PROFILE(runningCfg).preinfusionPressureFlowTarget, ACTIVE_PROFILE(runningCfg).preinfusionSec * 1000, isPressureAbove, -1, isWeightAbove, isWaterPumped);
+    addPressurePhase(Transition{ ACTIVE_PROFILE(runningCfg).preinfusionBar }, ACTIVE_PROFILE(runningCfg).preinfusionPressureFlowTarget, ACTIVE_PROFILE(runningCfg).preinfusionSec * 1000, isPressureAbove, -1, isWeightAbove, isWaterPumped, false, false);
   }
 }
 
@@ -572,11 +576,11 @@ void addSoakPhase() {
     float isWeightAbove = ACTIVE_PROFILE(runningCfg).soakAboveWeight > 0.f ? ACTIVE_PROFILE(runningCfg).soakAboveWeight : -1.f;
 
     if (maintainPressure > 0.f)
-      addPressurePhase(Transition{maintainPressure}, (maintainFlow > 0.f ? maintainFlow : 2.5f), phaseSoak * 1000, isPressureAbove, isPressureBelow, isWeightAbove, -1);
+      addPressurePhase(Transition{maintainPressure}, (maintainFlow > 0.f ? maintainFlow : 2.5f), phaseSoak * 1000, isPressureAbove, isPressureBelow, isWeightAbove, -1, true, true);
     else if(maintainFlow > 0.f)
-      addFlowPhase(Transition{maintainFlow},  -1, phaseSoak * 1000, isPressureAbove, isPressureBelow, isWeightAbove, -1);
+      addFlowPhase(Transition{maintainFlow},  -1, phaseSoak * 1000, isPressureAbove, isPressureBelow, isWeightAbove, -1, true, true);
     else
-      addPressurePhase(Transition{maintainPressure}, maintainFlow, phaseSoak * 1000, isPressureAbove, isPressureBelow, isWeightAbove, -1);
+      addPressurePhase(Transition{maintainPressure}, maintainFlow, phaseSoak * 1000, isPressureAbove, isPressureBelow, isWeightAbove, -1, true, true);
 }
 
 void addMainExtractionPhasesAndRamp() {
@@ -597,10 +601,10 @@ void addMainExtractionPhasesAndRamp() {
         /* ------------------------------------------ */
 
         if (fpStart > 0.f && fpHold > 0) {
-          addFlowPhase(Transition{ fpStart }, holdLimit, fpHold, -1, -1, -1, -1);
+          addFlowPhase(Transition{ fpStart }, holdLimit, fpHold, -1, -1, -1, -1, false, false);
           rampPhaseIndex = rampPhaseIndex > 0 ? rampPhaseIndex : profile.phaseCount() - 1;
         }
-        addFlowPhase(Transition{ fpStart, fpEnd, curve, curveTime }, ACTIVE_PROFILE(runningCfg).tfProfilingPressureRestriction, curveTime, -1, -1, -1, -1);
+        addFlowPhase(Transition{ fpStart, fpEnd, curve, curveTime }, ACTIVE_PROFILE(runningCfg).tfProfilingPressureRestriction, curveTime, -1, -1, -1, -1, false, false);
         rampPhaseIndex = rampPhaseIndex > 0 ? rampPhaseIndex : profile.phaseCount() - 1;
       }
       else { // pressure based profiling enabled
@@ -615,10 +619,10 @@ void addMainExtractionPhasesAndRamp() {
         /* ------------------------------------------ */
 
         if (ppStart > 0.f && ppHold > 0) {
-          addPressurePhase(Transition{ ppStart }, holdLimit, ppHold, -1, -1, -1, -1);
+          addPressurePhase(Transition{ ppStart }, holdLimit, ppHold, -1, -1, -1, -1, false, false);
           rampPhaseIndex = rampPhaseIndex > 0 ? rampPhaseIndex : profile.phaseCount() - 1;
         }
-        addPressurePhase(Transition{ ppStart, ppEnd, curve, curveTime }, ACTIVE_PROFILE(runningCfg).tpProfilingFlowRestriction, curveTime, -1, -1, -1, -1);
+        addPressurePhase(Transition{ ppStart, ppEnd, curve, curveTime }, ACTIVE_PROFILE(runningCfg).tpProfilingFlowRestriction, curveTime, -1, -1, -1, -1, false, false);
         rampPhaseIndex = rampPhaseIndex > 0 ? rampPhaseIndex : profile.phaseCount() - 1;
       }
     }
@@ -633,7 +637,7 @@ void addMainExtractionPhasesAndRamp() {
       uint16_t curveTime = ACTIVE_PROFILE(runningCfg).mfProfileSlope * 1000;
 
       /* ------------------------------------------ */
-      addFlowPhase(Transition(fpStart, fpEnd, curve, curveTime), ACTIVE_PROFILE(runningCfg).mfProfilingPressureRestriction, -1, -1, -1, -1, -1);
+      addFlowPhase(Transition(fpStart, fpEnd, curve, curveTime), ACTIVE_PROFILE(runningCfg).mfProfilingPressureRestriction, -1, -1, -1, -1, -1, false, false);
     }
     else { // pressure based profiling enabled
       /* Setting the phase specific restrictions */
@@ -643,10 +647,10 @@ void addMainExtractionPhasesAndRamp() {
       TransitionCurve curve = (TransitionCurve)ACTIVE_PROFILE(runningCfg).mpProfilingSlopeShape;
       uint16_t curveTime = ACTIVE_PROFILE(runningCfg).mpProfilingSlope * 1000;
       /* ------------------------------------------ */
-      addPressurePhase(Transition(ppStart, ppEnd, curve, curveTime), ACTIVE_PROFILE(runningCfg).mpProfilingFlowRestriction, -1, -1, -1, -1, -1);
+      addPressurePhase(Transition(ppStart, ppEnd, curve, curveTime), ACTIVE_PROFILE(runningCfg).mpProfilingFlowRestriction, -1, -1, -1, -1, -1, false, false);
     }
   } else { // Shot profiling disabled. Default to 9 bars
-    addPressurePhase(Transition(9.f), -1, -1, -1, -1, -1, -1);
+    addPressurePhase(Transition(9.f), -1, -1, -1, -1, -1, -1, false, false);
   }
 
   rampPhaseIndex = rampPhaseIndex > 0 ? rampPhaseIndex : profile.phaseCount() - 1;
@@ -679,23 +683,25 @@ void insertRampPhaseIfNeeded(size_t rampPhaseIndex) {
 }
 
 void addFillBasketPhase(float flowRate) {
-  addFlowPhase(Transition(flowRate), -1, -1, 0.1f, -1, -1, -1);
+  addFlowPhase(Transition(flowRate), -1, -1, 0.1f, -1, -1, -1, false, false);
 }
 
-void addPressurePhase(Transition pressure, float flowRestriction, int timeMs, float pressureAbove, float pressureBelow, float shotWeight, float isWaterPumped) {
-  addPhase(PHASE_TYPE::PHASE_TYPE_PRESSURE, pressure, flowRestriction, timeMs, pressureAbove, pressureBelow, shotWeight, isWaterPumped);
+void addPressurePhase(Transition pressure, float flowRestriction, int timeMs, float pressureAbove, float pressureBelow, float shotWeight, float isWaterPumped, bool tareAtStart, bool tareAtEnd) {
+  addPhase(PHASE_TYPE::PHASE_TYPE_PRESSURE, pressure, flowRestriction, timeMs, pressureAbove, pressureBelow, shotWeight, isWaterPumped, tareAtStart, tareAtEnd);
 }
 
-void addFlowPhase(Transition flow, float pressureRestriction, int timeMs, float pressureAbove, float pressureBelow, float shotWeight, float isWaterPumped) {
-  addPhase(PHASE_TYPE::PHASE_TYPE_FLOW, flow, pressureRestriction, timeMs, pressureAbove, pressureBelow, shotWeight, isWaterPumped);
+void addFlowPhase(Transition flow, float pressureRestriction, int timeMs, float pressureAbove, float pressureBelow, float shotWeight, float isWaterPumped, bool tareAtStart, bool tareAtEnd) {
+  addPhase(PHASE_TYPE::PHASE_TYPE_FLOW, flow, pressureRestriction, timeMs, pressureAbove, pressureBelow, shotWeight, isWaterPumped, tareAtStart, tareAtEnd);
 }
 
-void addPhase(PHASE_TYPE type, Transition target, float restriction, int timeMs, float pressureAbove, float pressureBelow, float shotWeight, float isWaterPumped) {
+void addPhase(PHASE_TYPE type, Transition target, float restriction, int timeMs, float pressureAbove, float pressureBelow, float shotWeight, float isWaterPumped, bool tareAtStart, bool tareAtEnd) {
   profile.addPhase(Phase {
     .type           = type,
     .target         = target,
     .restriction    = restriction,
-    .stopConditions = PhaseStopConditions{ .time=timeMs, .pressureAbove=pressureAbove, .pressureBelow=pressureBelow, .weight=shotWeight, .waterPumpedInPhase=isWaterPumped }
+    .stopConditions = PhaseStopConditions{ .time=timeMs, .pressureAbove=pressureAbove, .pressureBelow=pressureBelow, .weight=shotWeight, .waterPumpedInPhase=isWaterPumped },
+    .tareAtStart    = tareAtStart,
+    .tareAtEnd      = tareAtEnd
   });
 }
 
@@ -705,10 +711,14 @@ void onProfileReceived(Profile& newProfile) {
 static void profiling(void) {
   if (brewActive) { //runs this only when brew button activated and pressure profile selected
     uint32_t timeInShot = millis() - brewingTimer;
-    phaseProfiler.updatePhase(timeInShot, currentState);
+    bool shouldTare = phaseProfiler.updatePhase(timeInShot, currentState);
     CurrentPhase& currentPhase = phaseProfiler.getCurrentPhase();
     ShotSnapshot shotSnapshot = buildShotSnapshot(timeInShot, currentState, currentPhase);
     espCommsSendShotData(shotSnapshot, 100);
+
+    if (shouldTare) {
+      currentState.tarePending = true;
+    }
 
     if (phaseProfiler.isFinished()) {
       setPumpOff();
@@ -963,7 +973,9 @@ static void handlePostBrew(void) {
       }
       break;
     case PostShotPhase::WAITING_FOR_BREW_BUTTON_RELEASE:
-      if (!currentState.brewSwitchState) {
+      if (currentState.steamSwitchState) {
+        systemState.postShotPhase = IDLE;
+      } else if (!currentState.brewSwitchState) {
         systemState.postShotPhase = PostShotPhase::START_CLEAN_SHOWERHEAD;
       } else {
         lcdShowPopup("Switch brew to clean");

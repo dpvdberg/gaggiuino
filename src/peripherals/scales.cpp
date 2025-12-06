@@ -55,7 +55,7 @@ void scalesInit(float scalesF1, float scalesF2) {
 void scalesTare(void) {
   if (hwScalesPresent) {
     auto& loadCells = LoadCellSingleton::getInstance();
-    if (loadCells.wait_ready_timeout(150, 10)) {
+    if (loadCells.wait_ready_timeout(200, 10)) {
       loadCells.tare(4);
     }
   }
@@ -68,7 +68,7 @@ Measurement scalesGetWeight(void) {
   Measurement currentWeight = Measurement{ .value = 0.f, .millis = 0 };
   if (hwScalesPresent) {
     auto& loadCells = LoadCellSingleton::getInstance();
-    if (loadCells.wait_ready_timeout(150, 10)) {
+    if (loadCells.wait_ready_timeout(200, 10)) {
       float values[2];
       loadCells.get_units(values);
       currentWeight = Measurement{ .value=values[0] + values[1], .millis=millis() };

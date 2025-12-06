@@ -118,25 +118,35 @@ void CurrentPhase::update(int index, Phase& phase, uint32_t timeInPhase) {
 
 PhaseProfiler::PhaseProfiler(Profile& profile) : profile(profile) {}
 
-void PhaseProfiler::updatePhase(uint32_t timeInShot, SensorState& state) {
+bool PhaseProfiler::updatePhase(uint32_t timeInShot, SensorState& state) {
   size_t phaseIdx = currentPhaseIdx;
   uint32_t timeInPhase = timeInShot - phaseChangedSnapshot.timeInShot;
 
   if (phaseIdx >= profile.phaseCount() || profile.globalStopConditions.isReached(state, timeInShot)) {
     currentPhaseIdx = profile.phaseCount();
     currentPhase.update(currentPhaseIdx - 1, profile.phases[phaseIdx], timeInPhase);
-    return;
+    return false;
   }
 
   if (!profile.phases[phaseIdx].isStopConditionReached(state, timeInShot, phaseChangedSnapshot)) {
     currentPhase.update(phaseIdx, profile.phases[phaseIdx], timeInPhase);
-    return;
+    return false;
   }
+
+  bool tareAtEnd = profile.phases[phaseIdx].tareAtEnd;
 
   currentPhase.update(phaseIdx, profile.phases[phaseIdx], timeInPhase);
   phaseChangedSnapshot = buildShotSnapshot(timeInShot, state, currentPhase);
   currentPhaseIdx += 1;
+
+  bool tareAtStart = false;
+  if (!isFinished()) {
+    tareAtStart = profile.phases[currentPhaseIdx].tareAtStart;
+  }
+
   updatePhase(timeInShot, state);
+
+  return tareAtEnd || tareAtStart;
 }
 
 // Gets the profiling phase we should be in based on the timeInShot and the Sensors state
