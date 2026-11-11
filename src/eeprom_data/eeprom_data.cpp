@@ -23,7 +23,9 @@ namespace {
     // Profiles
     defaultData.activeProfile = 0;
     for (int i=0; i<MAX_PROFILES; i++) {
-      snprintf(defaultData.profiles[i].name, PROFILE_NAME_LENGTH, "%s", defaultsProfile[i].name);
+      size_t nameLength = strnlen(defaultsProfile[i].name, PROFILE_NAME_LENGTH - 1);
+      memcpy(defaultData.profiles[i].name, defaultsProfile[i].name, nameLength);
+      defaultData.profiles[i].name[nameLength] = '\0';
       defaultData.profiles[i].stageCount = defaultsProfile[i].stageCount;
       for (int s=0; s<MAX_STAGES; s++) {
         defaultData.profiles[i].stages[s] = defaultsProfile[i].stages[s];

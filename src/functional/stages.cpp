@@ -154,7 +154,7 @@ namespace stages {
 
   void formatSummary(const stage_t& stage, int number, char* buf, size_t len, bool needsExit) {
     if (len == 0) return;
-    char a[16], b[16], part[48];
+    char a[16], b[16], part[64];
     bool flow = stage.type == StageType::FLOW;
     const char* unit = flow ? "ml" : "b";
 

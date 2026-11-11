@@ -223,7 +223,7 @@ void lcdFetchPage(eepromValues_t &settings, NextionPage page, int targetProfile)
 }
 
 uint8_t lcdGetSelectedProfile(void) {
-  uint8_t pId;
+  uint8_t pId = 0;
   int attempts = 2;
   do {
     if (attempts-- <= 0) {
