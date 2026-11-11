@@ -10,6 +10,18 @@ short flushCounter = 0;
 uint8_t counter = 0;
 unsigned long descalingTimer = 0;
 int descalingCycle = 0;
+static unsigned long backflushTimer = 0;
+
+void descaleReset(void) {
+  descalingState = DescalingState::IDLE;
+  descalingCycle = 0;
+  descalingTimer = millis();
+}
+
+void flushReset(void) {
+  flushCounter = 0;
+  backflushTimer = millis();
+}
 
 void deScale(eepromValues_t &runningCfg, const SensorState &currentState) {
   switch (descalingState) {
@@ -94,7 +106,6 @@ void solenoidBeat() {
 }
 
 void backFlush(const SensorState &currentState) {
-  static unsigned long backflushTimer = millis();
   unsigned long elapsedTime = millis() - backflushTimer;
   if (currentState.brewSwitchState) {
     if (flushCounter >= 11) {

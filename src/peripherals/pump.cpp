@@ -82,10 +82,22 @@ void pumpStopAfter(const uint8_t val) {
   pump.stopAfter(val);
 }
 
+// Running total of pump strokes; unlike the counter below it isn't reset every loop.
+static long pumpTotalClicks = 0;
+
 long getAndResetClickCounter(void) {
   long counter = pump.getCounter();
   pump.resetCounter();
+  pumpTotalClicks += counter;
   return counter;
+}
+
+long getPumpTotalClicks(void) {
+  return pumpTotalClicks + pump.getCounter();
+}
+
+float getPumpClickMultiplier(void) {
+  return fpc_multiplier;
 }
 
 int getCPS(void) {
@@ -110,7 +122,8 @@ void pumpPhaseShift(void) {
 // plotted: https://www.desmos.com/calculator/eqynzclagu
 float getPumpFlowPerClick(const float pressure) {
   float fpc = 0.f;
-  fpc = (pressureInefficiencyCoefficient[5] / pressure + pressureInefficiencyCoefficient[6]) * ( -pressure * pressure ) + ( flowPerClickAtZeroBar - pressureInefficiencyCoefficient[0]) - (pressureInefficiencyCoefficient[1] + (pressureInefficiencyCoefficient[2] - (pressureInefficiencyCoefficient[3] - pressureInefficiencyCoefficient[4] * pressure) * pressure) * pressure) * pressure;
+  // (c5 / p + c6) * (-p^2) written as -(c5 + c6 * p) * p, so p == 0 doesn't give 0/0 (NaN)
+  fpc = -(pressureInefficiencyCoefficient[5] + pressureInefficiencyCoefficient[6] * pressure) * pressure + ( flowPerClickAtZeroBar - pressureInefficiencyCoefficient[0]) - (pressureInefficiencyCoefficient[1] + (pressureInefficiencyCoefficient[2] - (pressureInefficiencyCoefficient[3] - pressureInefficiencyCoefficient[4] * pressure) * pressure) * pressure) * pressure;
   return fpc * fpc_multiplier;
 }
 

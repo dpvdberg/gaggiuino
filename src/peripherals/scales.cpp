@@ -52,16 +52,19 @@ void scalesInit(float scalesF1, float scalesF2) {
   }
 }
 
-void scalesTare(void) {
+bool scalesTare(void) {
   if (hwScalesPresent) {
     auto& loadCells = LoadCellSingleton::getInstance();
     if (loadCells.wait_ready_timeout(200, 10)) {
       loadCells.tare(4);
+      return true;
     }
+    return false;
   }
   else if (remoteScalesIsPresent()) {
     remoteScalesTare();
   }
+  return true;
 }
 
 Measurement scalesGetWeight(void) {
@@ -94,4 +97,25 @@ float scalesDripTrayWeight() {
     LoadCellSingleton::getInstance().read_average(value, 4);
   }
   return ((float)value[0] + (float)value[1]);
+}
+
+bool scalesHardwarePresent(void) {
+  return hwScalesPresent;
+}
+
+bool scalesReadCells(float raw[2], uint8_t times) {
+  raw[0] = raw[1] = 0.f;
+  if (!hwScalesPresent) return false;
+  auto& loadCells = LoadCellSingleton::getInstance();
+  if (!loadCells.wait_ready_timeout(300, 10)) return false;
+  long values[2] = {};
+  loadCells.get_value(values, times);
+  raw[0] = static_cast<float>(values[0]);
+  raw[1] = static_cast<float>(values[1]);
+  return true;
+}
+
+void scalesSetFactors(float factor1, float factor2) {
+  if (!hwScalesPresent) return;
+  LoadCellSingleton::getInstance().set_scale(factor1, factor2);
 }

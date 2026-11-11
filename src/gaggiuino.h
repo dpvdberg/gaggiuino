@@ -18,8 +18,15 @@
 #include "system_state.h"
 #include "functional/descale.h"
 #include "functional/just_do_coffee.h"
+#include "functional/stages.h"
+#include "functional/scales_calibration.h"
+#include "functional/pump_calibration.h"
+#include "functional/machine_state.h"
+#include "functional/calibration_flow.h"
+#include "lcd/stage_screens.h"
 #include "functional/predictive_weight.h"
 #include "profiling_phases.h"
+#include "median_filter.h"
 #include "peripherals/esp_comms.h"
 #include "peripherals/led.h"
 #include "peripherals/tof.h"
@@ -42,7 +49,9 @@
 #define CLEANING_SKIP_TEMP      100.f // Cleaning skip temperature threshold
 #define SYS_PRESSURE_IDLE       0.7f // System pressure threshold at idle
 #define MIN_WATER_LVL           10u // Min allowable tank water lvl
-#define WEIGHT_JUMP_GRAMS_PER_SEC       5.0f // Filtered weight jumps (g).
+#define SCALES_TARE_MAX_RETRIES 5 // Give up on a tare after this many "scales not ready" attempts
+#define MAX_SHOT_DURATION_MS    120000L // Safety stop: no shot runs longer than this, even if scales fail
+#define MAX_SHOT_WATER_ML       250.f // Safety stop: no shot pumps more water than this (ml)
 
 enum class OPERATION_MODES {
   OPMODE_straight9Bar,
@@ -68,7 +77,6 @@ const float calibrationPressure = 0.65f;
 #endif
 
 //Timers
-unsigned long systemHealthTimer;
 unsigned long pageRefreshTimer;
 unsigned long pressureTimer;
 unsigned long brewingTimer;
@@ -79,19 +87,18 @@ unsigned long steamTime;
 
 //scales vars
 Measurements weightMeasurements(4);
+MedianFilter3 weightFilter;
 
-// brew detection vars
+// true while a shot, flush or descale runs (heater control, LED, brew timer)
 bool brewActive = false;
-bool nonBrewModeActive = false;
 
 //PP&PI variables
-int preInfusionFinishedPhaseIdx = 3;
+stages::PredictiveHints stageHints; // where the soak stage is, for the predictive scales
 bool homeScreenScalesEnabled = false;
 
 // Other util vars
 float previousSmoothedPressure;
 float previousSmoothedPumpFlow;
 
-static void sysHealthCheck(float pressureThreshold);
 
 #endif

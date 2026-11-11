@@ -15,6 +15,9 @@ void setPumpOff(void);
 void setPumpFullOn(void);
 void setPumpToRawValue(const uint8_t val);
 long  getAndResetClickCounter(void);
+long  getPumpTotalClicks(void);
+// Converts the model's per-click value to ml per click (depends on mains frequency).
+float getPumpClickMultiplier(void);
 int getCPS(void);
 void pumpPhaseShift(void);
 void pumpStopAfter(const uint8_t val);

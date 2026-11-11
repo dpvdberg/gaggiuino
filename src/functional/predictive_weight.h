@@ -4,13 +4,11 @@
 
 #include "profiling_phases.h"
 #include "sensors_state.h"
-#include "../eeprom_data/eeprom_data.h"
+#include "stages.h"
 
-extern int preInfusionFinishedPhaseIdx;
 constexpr float crossSectionalArea = 0.0026f; // avg puck crossectional area.
 constexpr float dynamicViscosity = 0.0002964f; // avg water dynamic viscosity at 90-95 celsius.
 bool predictiveTargetReached = false;
-int predictivePreinfusionFinishedCheck = 0.f;
 
 class PredictiveWeight {
 private:
@@ -41,7 +39,8 @@ public:
     return resistance;
   }
 
-  void update(const SensorState& state, CurrentPhase& phase, const eepromValues_t& cfg) {
+  // hints: where the soak stage is and what pressure preinfusion aims for (from stages::buildPhases)
+  void update(const SensorState& state, CurrentPhase& phase, const stages::PredictiveHints& hints) {
     // If at least 50ml have been pumped, there has to be output (unless the water is going to the void)
     // No point going through all the below logic if we hardsetting the predictive scales to start counting
     if (isForceStarted || outputFlowStarted || state.waterPumped >= 65.f) {
@@ -62,18 +61,10 @@ public:
     On profiles whare pressure drop is of concern ~1 bar of drop is the point where liquid output starts. */
 
     bool phaseTypePressure = phase.getType() == PHASE_TYPE::PHASE_TYPE_PRESSURE;
-    predictivePreinfusionFinishedCheck = phase.getIndex();
-    preinfusionFinished = ACTIVE_PROFILE(cfg).preinfusionState && ACTIVE_PROFILE(cfg).soakState
-                              ? predictivePreinfusionFinishedCheck >= preInfusionFinishedPhaseIdx-1
-                              : predictivePreinfusionFinishedCheck >= preInfusionFinishedPhaseIdx;
-
-    bool soakEnabled = false;
-    soakEnabled = ACTIVE_PROFILE(cfg).soakState
-                    ? phaseTypePressure
-                      ? ACTIVE_PROFILE(cfg).soakTimePressure > 0
-                      : ACTIVE_PROFILE(cfg).soakTimeFlow > 0
-                    : false;
-    float pressureTarget = phaseTypePressure ? ACTIVE_PROFILE(cfg).preinfusionBar : ACTIVE_PROFILE(cfg).preinfusionFlowPressureTarget;
+    // Preinfusion = the stages before the first soak stage.
+    bool soakEnabled = hints.soakPhaseIdx >= 0;
+    preinfusionFinished = !soakEnabled || phase.getIndex() >= hints.soakPhaseIdx;
+    float pressureTarget = hints.preinfusionPressure;
 
 
     // Pressure has to reach full pi target bar threshold.

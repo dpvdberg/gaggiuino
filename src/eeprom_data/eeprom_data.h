@@ -15,6 +15,7 @@
 */
 #define MAX_PROFILES 5
 #define PROFILE_NAME_LENGTH 25
+#define MAX_STAGES 12
 
 /**
 * current data version definition below
@@ -36,8 +37,31 @@
 */
 
 /**
-* Version 10:
-* - Add multiple brew profiles
+* A stage is one step of a brew profile: drive the pump to a pressure or flow target
+* (optionally ramping from start to end) until one of the exit conditions is met.
+* A value of 0 means "off" / "not set".
+*/
+enum class StageType : uint8_t { PRESSURE = 0, FLOW = 1 };
+enum class StageCurve : uint8_t { LINEAR = 0, EASE_IN = 1, EASE_OUT = 2, EASE_IN_OUT = 3 };
+
+struct stage_t {
+  StageType  type;
+  StageCurve curve;
+  bool       tareAtStart;
+  bool       tareAtEnd;
+  float      start;              // bar or ml/s; 0 = start from the current value
+  float      end;                // bar or ml/s
+  float      rampTime;           // seconds to go from start to end; 0 = jump straight to end
+  float      limit;              // max flow (pressure stage) or max pressure (flow stage); 0 = none
+  float      exitTime;           // seconds in this stage
+  float      exitPressureAbove;  // bar
+  float      exitPressureBelow;  // bar
+  float      exitWeight;         // grams in the cup
+};
+
+/**
+* Version 13:
+* - Brew profiles are a list of stages instead of fixed preinfusion/soak/profile sections
 */
 struct eepromValues_t {
   uint16_t steamSetPoint;
@@ -48,59 +72,8 @@ struct eepromValues_t {
   uint8_t activeProfile;
   struct profile_t {
     char     name[PROFILE_NAME_LENGTH];
-    // Preinfusion vars section
-    bool     preinfusionState;
-    bool     preinfusionFlowState;
-    uint16_t preinfusionSec;
-    float    preinfusionBar;
-    float    preinfusionFlowVol;
-    uint16_t preinfusionFlowTime;
-    float    preinfusionFlowPressureTarget;
-    float    preinfusionPressureFlowTarget;
-    float    preinfusionFilled;
-    bool     preinfusionPressureAbove;
-    float    preinfusionWeightAbove;
-    // Soak vars section
-    bool     soakState;
-    uint16_t soakTimePressure;
-    uint16_t soakTimeFlow;
-    float    soakKeepPressure;
-    float    soakKeepFlow;
-    float    soakBelowPressure;
-    float    soakAbovePressure;
-    float    soakAboveWeight;
-    // PI -> PF ramp settings
-    uint16_t preinfusionRamp;
-    uint16_t preinfusionRampSlope;
-    // Profiling vars section
-    bool     tpState;
-    bool     tpType;
-    float    tpProfilingStart;
-    float    tpProfilingFinish;
-    uint16_t tpProfilingHold;
-    float    tpProfilingHoldLimit;
-    uint16_t tpProfilingSlope;
-    uint16_t tpProfilingSlopeShape;
-    float    tpProfilingFlowRestriction;
-    float    tfProfileStart;
-    float    tfProfileEnd;
-    uint16_t tfProfileHold;
-    float    tfProfileHoldLimit;
-    uint16_t tfProfileSlope;
-    uint16_t tfProfileSlopeShape;
-    float    tfProfilingPressureRestriction;
-    bool     profilingState;
-    bool     mfProfileState;
-    float    mpProfilingStart;
-    float    mpProfilingFinish;
-    uint16_t mpProfilingSlope;
-    uint16_t mpProfilingSlopeShape;
-    float    mpProfilingFlowRestriction;
-    float    mfProfileStart;
-    float    mfProfileEnd;
-    uint16_t mfProfileSlope;
-    uint16_t mfProfileSlopeShape;
-    float    mfProfilingPressureRestriction;
+    uint8_t  stageCount;  // 1..MAX_STAGES
+    stage_t  stages[MAX_STAGES];
     /*-----------OTHER---------------------*/
     uint16_t setpoint;
     bool     stopOnWeightState;
