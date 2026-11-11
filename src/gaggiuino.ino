@@ -165,6 +165,7 @@ static void sensorsReadWeight(void) {
           weightMeasurements.clear();
           weightMeasurements.add(Measurement{ .value = 0.f, .millis = millis() });
           weightFilter.reset(0.f);
+          weightStepGuard.reset(0.f, millis());
           currentState.weight = 0.f;
           currentState.tarePending = false;
         }
@@ -177,6 +178,13 @@ static void sensorsReadWeight(void) {
       if (measuredWeight.millis != 0 && !currentState.tarePending) {
         // Median of 3 ignores single spikes but follows real steps within 2 readings.
         measuredWeight.value = weightFilter.add(measuredWeight.value);
+
+        if (brewActive) {
+          // A step faster than coffee can flow (cup placed/bumped, failed tare) moves the zero point.
+          bool absorbed = false;
+          measuredWeight.value = weightStepGuard.apply(measuredWeight.value, measuredWeight.millis, &absorbed);
+          if (absorbed) LOG_INFO("Weight step ignored, shot weight now %.1f g", static_cast<double>(measuredWeight.value));
+        }
         currentState.weight = measuredWeight.value;
 
         if (brewActive) {

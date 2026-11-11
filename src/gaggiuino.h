@@ -27,6 +27,7 @@
 #include "functional/predictive_weight.h"
 #include "profiling_phases.h"
 #include "median_filter.h"
+#include "weight_step_guard.h"
 #include "peripherals/esp_comms.h"
 #include "peripherals/led.h"
 #include "peripherals/tof.h"
@@ -88,6 +89,7 @@ unsigned long steamTime;
 //scales vars
 Measurements weightMeasurements(4);
 MedianFilter3 weightFilter;
+WeightStepGuard weightStepGuard;
 
 // true while a shot, flush or descale runs (heater control, LED, brew timer)
 bool brewActive = false;

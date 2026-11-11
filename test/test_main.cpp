@@ -6,6 +6,7 @@
 #include "./tests/test_stages.cpp"
 #include "./tests/test_scales_calibration.cpp"
 #include "./tests/test_machine_state.cpp"
+#include "./tests/test_weight_step_guard.cpp"
 
 // Unity 2.6+ no longer provides default (weak) hooks.
 void setUp(void) {}
@@ -20,5 +21,6 @@ int main(int argc, char **argv) {
     runAllStagesTests();
     runAllScalesCalibrationTests();
     runAllMachineStateTests();
+    runAllWeightStepGuardTests();
     UNITY_END();
 }
